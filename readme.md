@@ -36,7 +36,7 @@ Of these sources, 199 are categorised as Luminous Infrared Galaxies (LIRGs) with
 
 - ### *Planck* Catalogue of Compact Sources (PCCS)
 We include 17 sources from the *Planck* Catalogue of Compact Sources (PCCS) selected at 857GHz with a 90% completeness
-level and minimum flux of 0.658Jy [3]. For these sources we were provided with SPIRE 250, 350 and 500 $μm measurements,
+level and minimum flux of 0.658Jy [3]. For these sources we were provided with SPIRE 250, 350 and 500 μm measurements,
 for which we acquired *IRAS* 60 and 100 μm measurements from the NASA/IPAC Extragalactic Database (NED).
 
 - ### *HERschel* ULIRG Survey (HERUS)
@@ -89,3 +89,8 @@ Notices of the Royal Astronomical Society, 462(3), pp.3146-3179.](https://arxiv.
 Buat, V. and Clemens, M., 2014. PACS photometry of the Herschel Reference Survey–far-infrared/submillimetre colours as
 tracers of dust properties in nearby galaxies. Monthly Notices of the Royal Astronomical Society, 440(1),
 pp.942-956.](https://academic.oup.com/mnras/article/440/1/942/2891848)
+
+## Acknowledgement
+This work has made use of the NASA/IPAC Extragalactic Database [(NED)](https://ned.ipac.caltech.edu/) which is operated
+by the Jet Propulsion Laboratory, California Institute of Technology, under contract with the National Aeronautics and
+Space Administration.
