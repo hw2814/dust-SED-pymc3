@@ -19,8 +19,8 @@ where we have used ![](figures/equations/kappa_0.gif). The index β is the emiss
 between galaxies in the range 1 < β < 2 (where β = 1 would be a pure black body), however values outside of this range
 have been observed. [1]
  
-For the MCMC implementation we use pymc3, modelling each flux measurement as a normal distribution with the mean given
-by the MBB function and the standard deviation as the error on the measurement.
+For the MCMC implementation we use [PyMC3](https://docs.pymc.io/), modelling each flux measurement as a normal
+distribution with the mean given by the MBB function and the standard deviation as the error on the measurement.
 
 
 ## Data Sets
@@ -52,6 +52,15 @@ Astrophysical Terahertz Large Area Survey (H-ATLAS) [5], a survey over 600 deg²
 - ### PACS (Cortese)
 323 galaxies from the Herschel Reference Survey (HRS) in Cortese 2014 [6]. The HRS is a volume limited (15Mpc ≤ D ≤ 
 25Mpc) K-band selected sample. These sources and Cortese's results are used to validate our method.
+
+## Usage
+First, try running `notebooks/model_convergence` to check that the model runs on your machine. All results were produced
+with the package versions in `requirements.txt` on python 3.7 and with the default parameters set in `mcmc.create_args`.
+To fit the model to the full dataset, run `python mcmc.py` (see `mcmc.create_args` for command line options for changing
+the model parameters).
+
+## Notebooks
+TODO
 
 ## References
 [1] [Dupac, X., Bernard, J.P., Boudet, N., Giard, M., Lamarre, J.M., Mény, C., Pajot, F., Ristorcelli, I., Serra, G., 
