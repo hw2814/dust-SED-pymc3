@@ -189,7 +189,7 @@ def run_mcmc(data_set: pd.DataFrame, n_sample: int, chains: int, burn: int, thin
         trace_results.append(batch_results)
     results = pd.concat(trace_results)
     successful_fits = len(results[results['chisquare'] >= 0.95])
-    print(f'{successful_fits} with p => 0.95')
+    print(f'{successful_fits} with p >= 0.95')
     return results
 
 
