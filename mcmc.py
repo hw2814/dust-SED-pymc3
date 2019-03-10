@@ -1,13 +1,11 @@
 #!/usr/bin/python3
 """
 Run MCMC fitting MBB spectrum to flux measurements.
-Run on the command line to produce results files of temperature, mass and emissivity, or import
-functions to run in a notebook.
 """
-from argparse import ArgumentParser
 from math import ceil
 import numpy as np
 from os.path import join
+from scipy.stats import chi2
 from typing import Tuple
 
 import pandas as pd
@@ -24,6 +22,25 @@ FLUX_COLS = ['F60', 'F70', 'F100', 'F160', 'F250', 'F350', 'F500']
 ERR_COLS = ['sigma60', 'sigma70', 'sigma100', 'sigma160', 'sigma250', 'sigma350', 'sigma500']
 
 
+def create_args():
+    """Create command line arguments"""
+    from argparse import ArgumentParser
+    options = ArgumentParser(description=__doc__, usage="python mcmc.py FILENAME [options]")
+    options.add_argument('filename', action='store', nargs='?', default=join('data', 'flux_measurements.csv'), type=str,
+                         help="filename of input data. Default 'data/flux_measurements.csv'")
+    options.add_argument('-n', '--n-sample', action='store', default=15000, type=int, dest='n_sample',
+                         help='Number of samples to take. Default 15000')
+    options.add_argument('-c', '--chains', action='store', default=3, type=int, dest='chains',
+                         help='Number of concurrent Markov Chains. Default: 3')
+    options.add_argument('-b', '--burn', action='store', default=1000, type=int, dest='burn',
+                         help='Number of initial samples to burn. Default 1000')
+    options.add_argument('-t', '--thin', action='store', default=5, type=int, dest='thin',
+                         help='Thinning level of sample (keep every n sample only). Default 5')
+    options.add_argument('-ch', '--chunks', action='store', default=250, type=int, dest='chunk',
+                         help='Size of data chunks to collect traces. Default 250')
+    return options.parse_args()
+
+
 class Constants:
     h = 6.62607e-34
     c = 2.998e8
@@ -37,7 +54,7 @@ class Constants:
 constants = Constants()
 
 
-def get_measurement_wavelengths(df: pd.DataFrame) -> np.array:
+def get_measurement_wavelengths(df: pd.DataFrame or pd.Series) -> np.array:
     """From column names of non-empty flux columns, determine the measurement wavelengths"""
     if isinstance(df, pd.Series):
         cols = [int(col[1:]) for col in df[FLUX_COLS].dropna().index]
@@ -46,13 +63,13 @@ def get_measurement_wavelengths(df: pd.DataFrame) -> np.array:
     return 1e-6 * np.array(cols)
 
 
-def get_measurement_frequencies(df: pd.DataFrame) -> np.array:
+def get_measurement_frequencies(df: pd.DataFrame or pd.Series) -> np.array:
     """Determines measurement frequencies from non-empty flux columns, see get_measurement_wavelengths"""
     wls = get_measurement_wavelengths(df)
     return constants.c / wls
 
 
-def identify_flux_measurements(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def identify_flux_measurements(df: pd.DataFrame or pd.Series) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     From a dataframe, identify flux measurement and error columns.
     Returns dataframe slices of the flux and error data
@@ -100,24 +117,6 @@ def flux_func(nu_obs, temp, beta, mass, d, z):
                 unp.exp(h * nu / (k_b * temp)) - 1)
 
 
-def create_args():
-    """Create command line arguments"""
-    options = ArgumentParser(description=__doc__, usage="python mcmc.py FILENAME [options]")
-    options.add_argument('filename', action='store', nargs='?', default=join('data', 'flux_measurements.csv'), type=str,
-                         help="filename of input data. Default 'data/flux_measurements.csv'")
-    options.add_argument('-n', '--n-sample', action='store', default=15000, type=int, dest='n_sample',
-                         help='Number of samples to take. Default 15000')
-    options.add_argument('-c', '--chains', action='store', default=3, type=int, dest='chains',
-                         help='Number of concurrent Markov Chains. Default: 3')
-    options.add_argument('-b', '--burn', action='store', default=500, type=int, dest='burn',
-                         help='Number of initial samples to burn. Default 500')
-    options.add_argument('-t', '--thin', action='store', default=5, type=int, dest='thin',
-                         help='Thinning level of sample (keep every n sample only). Default 5')
-    options.add_argument('-ch', '--chunks', action='store', default=250, type=int, dest='chunk',
-                         help='Size of data chunks to collect traces. Default 250')
-    return options.parse_args()
-
-
 def make_model(flux, err, nu, d, z):
     """Construct pymc3 model from parameters as in flux_func"""
     with pm.Model() as model:
@@ -148,6 +147,8 @@ def get_trace(flux, err, nu, d, z, n_sample, chains, **kwargs) -> MultiTrace:
     """
     model = make_model(flux, err, nu, d, z)
     with model:
+        if chains == 1:
+            kwargs['compute_convergence_checks'] = False
         trace = pm.sample(n_sample, chains=chains, njobs=chains, init='adapt_diag', **kwargs)
         return trace
 
@@ -172,27 +173,44 @@ def extract_results_from_trace(index: int, trace: MultiTrace, burn: int, thin: i
 def run_mcmc(data_set: pd.DataFrame, n_sample: int, chains: int, burn: int, thin: int, chunk: int,
              **kwargs) -> pd.DataFrame:
     """
-    Identifies relevant flux measurements and runs the MCMC. The dataframe is chunked since the trace
+    Identifies relevant flux measurements and runs the MCMC sampling. The dataframe is chunked since the trace
     can get very large for a large number of samples and objects. kwargs passed to pymc3.sample
     """
-    fluxes, errors = identify_flux_measurements(data_set)
     nu = get_measurement_frequencies(data_set)
     n_chunks = ceil(len(data_set) / chunk)
     trace_results = []
     for n_chunk, i in enumerate(range(0, len(data_set), chunk)):
         print(f'\nRunning MCMC for {data_set["Origin"].iloc[0]}: chunk {n_chunk + 1} of {n_chunks}')
-        trace = get_trace(
-            flux=fluxes.iloc[i: i + chunk],
-            err=errors.iloc[i: i + chunk],
-            nu=nu,
-            d=data_set.iloc[i: i + chunk]['D'],
-            z=data_set.iloc[i: i + chunk]['z'],
-            n_sample=n_sample,
-            chains=chains,
-            **kwargs
-        )
-        trace_results.append(extract_results_from_trace(data_set.iloc[i: i + chunk].index, trace, burn, thin))
-    return pd.concat(trace_results)
+        batch = data_set.iloc[i: i + chunk]
+        fluxes, errors = identify_flux_measurements(batch)
+        trace = get_trace(flux=fluxes, err=errors, nu=nu, d=batch['D'], z=batch['z'], n_sample=n_sample, chains=chains, **kwargs)
+        batch_results = extract_results_from_trace(batch.index, trace, burn, thin)
+        batch_results['chisquare'] = [chisquare_fit(batch.iloc[i], batch_results.iloc[i]) for i in range(batch.shape[0])]
+        trace_results.append(batch_results)
+    results = pd.concat(trace_results)
+    successful_fits = len(results[results['chisquare'] >= 0.95])
+    print(f'{successful_fits} with p => 0.95')
+    return results
+
+
+def chisquare_fit(data: pd.Series, results: pd.Series) -> float:
+    """
+    Return the chi-square p value of the fitted data compared with the measured fluxes
+    :param data: pd.Series containing fluxes and measurement errors
+    :param results:  pd.Series containing mean temperature, beta and log mass
+    :return: float, chi-square p value
+    """
+    def calculate_chisquare(obs: np.array, exp: np.array, err: np.array, dof: int) -> float:
+        """Returns reduced chisquare p value"""
+        chisq = np.sum((obs - exp) ** 2 / err ** 2) / dof
+        return 1 - chi2.pdf(chisq, dof)
+    fluxes, errors = identify_flux_measurements(data)
+    nu = get_measurement_frequencies(data)
+    # 3 free parameters (T, beta, M)
+    dof = len(fluxes) - 3
+    temp, beta, mass = results['temp mean'], results['beta mean'], results['mass mean']
+    calculated_fluxes = flux_func(nu, temp, beta, mass, data['D'], data['z'])
+    return calculate_chisquare(calculated_fluxes, fluxes.values, errors.values, dof)
 
 
 def main_func(df: pd.DataFrame, n_sample: int, chains: int, burn: int, thin: int, chunk: int) -> dict:
@@ -210,15 +228,15 @@ def main_func(df: pd.DataFrame, n_sample: int, chains: int, burn: int, thin: int
     data_sets = {data_source: df[df['Origin'] == data_source] for data_source in df['Origin'].unique()}
     log_text = '\n'.join([f'\t{data_source}: {len(data_set)}' for data_source, data_set in data_sets.items()])
     print(f'Processing {len(df)} objects:\n{log_text}')
-    print(f'MCMC will take {n_sample} samples for each source in {chains} chain(s)')
+    print(f'MCMC will take {n_sample} samples for each object in {chains} chain(s)')
     traces = {source: run_mcmc(data_set, n_sample, chains, burn, thin, chunk) for source, data_set in data_sets.items()}
     return traces
 
 
 if __name__ == '__main__':
     args = create_args().__dict__
-    input_data = pd.read_csv(args.pop('filename'))
+    input_data = pd.read_csv(args.pop('filename')).set_index('Name')
     results = main_func(input_data, **args)
     for source, data in results.items():
         filename = "-".join([source, str(args["n_sample"]), str(args["chains"]), str(args["burn"]), str(args["thin"])])
-        data.to_csv(join('results', 'raw', filename + '.csv'))
+        data.to_csv(join('results', 'raw', filename + '.csv'), mode='w+')
