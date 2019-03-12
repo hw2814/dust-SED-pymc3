@@ -153,10 +153,10 @@ def get_trace(flux, err, nu, d, z, n_sample, chains, **kwargs) -> MultiTrace:
         return trace
 
 
-def extract_results_from_trace(index: int, trace: MultiTrace, burn: int, thin: int) -> pd.DataFrame:
+def extract_results_from_trace(index: list, trace: MultiTrace, burn: int, thin: int) -> pd.DataFrame:
     """
     Add results of MCMC to data_set
-    :param index: iterable of values for index
+    :param index: iterable of object names for index
     :param trace: pymc3.trace object, MCMC results for data set
     :param burn: number of initial samples to burn
     :param thin: multiple of samples to keep
@@ -170,8 +170,7 @@ def extract_results_from_trace(index: int, trace: MultiTrace, burn: int, thin: i
     return trace_results
 
 
-def run_mcmc(data_set: pd.DataFrame, n_sample: int, chains: int, burn: int, thin: int, chunk: int,
-             **kwargs) -> pd.DataFrame:
+def run_mcmc(data_set: pd.DataFrame, n_sample: int, chains: int, burn: int, thin: int, chunk: int, **kwargs) -> pd.DataFrame:
     """
     Identifies relevant flux measurements and runs the MCMC sampling. The dataframe is chunked since the trace
     can get very large for a large number of samples and objects. kwargs passed to pymc3.sample
